@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -20,7 +21,12 @@ public class TetherReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         Log.d(TAG, "Broadcast received: " + intent.getAction());
-        new Thread(() -> doTether(context)).start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                doTether(context);
+            }
+        }).start();
     }
 
     private void doTether(Context context) {
@@ -28,26 +34,27 @@ public class TetherReceiver extends BroadcastReceiver {
             ConnectivityManager cm = (ConnectivityManager)
                     context.getSystemService(Context.CONNECTIVITY_SERVICE);
 
-            // 用动态代理创建 OnStartTetheringCallback
             Class<?> cbClass = Class.forName(
                     "android.net.ConnectivityManager$OnStartTetheringCallback");
 
             CountDownLatch latch = new CountDownLatch(1);
             AtomicBoolean ok = new AtomicBoolean(false);
 
-            Object callback = java.lang.reflect.Proxy.newProxyInstance(
+            Object callback = Proxy.newProxyInstance(
                     cbClass.getClassLoader(),
                     new Class<?>[]{cbClass},
-                    (proxy, method, args) -> {
-                        Log.d(TAG, "Callback: " + method.getName());
-                        if ("onTetheringStarted".equals(method.getName())) {
-                            ok.set(true);
+                    new InvocationHandler() {
+                        @Override
+                        public Object invoke(Object proxy, Method method, Object[] args) {
+                            Log.d(TAG, "Callback: " + method.getName());
+                            if ("onTetheringStarted".equals(method.getName())) {
+                                ok.set(true);
+                            }
+                            latch.countDown();
+                            return null;
                         }
-                        latch.countDown();
-                        return null;
                     });
 
-            // 找 startTethering 方法
             Method m = null;
             for (Method mm : cm.getClass().getDeclaredMethods()) {
                 if ("startTethering".equals(mm.getName())
