@@ -35,7 +35,7 @@ jobs:
           mkdir -p out
           javac -source 8 -target 8 -cp "$AJ" -d out app/src/main/java/com/ethtether/app/TetherReceiver.java app/src/main/java/com/ethtether/app/BootReceiver.java app/src/main/java/com/ethtether/app/MainActivity.java
           $D8 --min-api 24 --output . out/com/ethtether/app/*.class --lib "$AJ"
-          $AAPT package -f -M app/src/main/AndroidManifest.xml -I "$AJ" -F unsigned.apk
+          $AAPT package -f -M app/src/main/AndroidManifest.xml -I "$AJ" -F unsigned.apk --min-sdk-version 24 --target-sdk-version 34
           $AAPT add unsigned.apk classes.dex
           keytool -genkeypair -v -keystore debug.keystore -keyalg RSA -keysize 2048 -validity 10000 -alias androiddebugkey -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
           $APKSIGNER sign --ks debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out eth-tether.apk unsigned.apk
