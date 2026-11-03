@@ -1,29 +1,4 @@
-name: build-apk
-on: [push]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: setup android sdk
-        run: |
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          cd $HOME/android-sdk/cmdline-tools
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
-          unzip -qo tools.zip
-          mv cmdline-tools latest
-          export ANDROID_HOME=$HOME/android-sdk
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
-
-      - name: build apk
+- name: build apk
         run: |
           set -x
           export ANDROID_HOME=$HOME/android-sdk
@@ -33,30 +8,24 @@ jobs:
           AAPT=$BUILD_TOOLS/aapt
           APKSIGNER=$BUILD_TOOLS/apksigner
 
-          # 1. compile java
           mkdir -p out
-          javac -source 8 -target 8 -bootclasspath "$AJ" -cp "$AJ" -d out \
+          javac -source 8 -target 8 -cp "$AJ" -d out \
             app/src/main/java/com/ethtether/app/TetherReceiver.java \
             app/src/main/java/com/ethtether/app/BootReceiver.java \
             app/src/main/java/com/ethtether/app/MainActivity.java
 
-          # 2. d8 → classes.dex
           $D8 --min-api 24 --output . out/com/ethtether/app/*.class --lib "$AJ"
 
-          # 3. package APK (manifest only, no resources)
           $AAPT package -f -M app/src/main/AndroidManifest.xml -I "$AJ" -F unsigned.apk
 
-          # 4. add dex to APK
           $AAPT add unsigned.apk classes.dex
 
-          # 5. generate debug keystore
           keytool -genkeypair -v -keystore debug.keystore \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -alias androiddebugkey \
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
 
-          # 6. sign APK
           $APKSIGNER sign --ks debug.keystore \
             --ks-key-alias androiddebugkey \
             --ks-pass pass:android \
@@ -64,8 +33,3 @@ jobs:
             --out eth-tether.apk unsigned.apk
 
           ls -la eth-tether.apk
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: eth-tether-apk
-          path: eth-tether.apk
